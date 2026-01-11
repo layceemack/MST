@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - Luna Massage</title>
-    <!-- Add this AFTER your existing styles but BEFORE your script tag -->
+    <!-- EmailJS script FIRST -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -342,18 +342,15 @@
         </div>
     </div>
 
-        <script>
+    <script>
         // Configuration
         const SHEETDB_URL = 'https://sheetdb.io/api/v1/2iae785e45y0u';
-        
-        // EmailJS Configuration - REPLACE WITH YOUR ACTUAL VALUES
+
+        // EmailJS Configuration
         const EMAILJS_CONFIG = {
-            SERVICE_ID: 'service_6uxi424',           // From EmailJS dashboard
-            PUBLIC_KEY: '2bQtqNNP3Kd3VG7tE',           // From EmailJS dashboard
-            TEMPLATES: {
-                CONFIRMATION: 'template_qbwcahb',    // Template for confirmed bookings
-                REMINDER: 'template_7s5l0by'             // Template for reminders
-            }
+            SERVICE_ID: 'service_6uxi424',
+            PUBLIC_KEY: '2bQtqNNP3Kd3VG7tE',
+            TEMPLATE_ID: 'template_e9mrex8'
         };
 
         // Admin credentials
@@ -364,16 +361,23 @@
         let allBookings = [];
         let selectedBooking = null;
         let currentFilter = 'all';
+        let isEmailJSInitialized = false;
+
+        // Initialize EmailJS IMMEDIATELY when script loads
+        console.log('Initializing EmailJS...');
+        try {
+            emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
+            console.log('EmailJS initialized successfully');
+            isEmailJSInitialized = true;
+        } catch (error) {
+            console.error('EmailJS initialization error:', error);
+            isEmailJSInitialized = false;
+        }
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             checkAuth();
             setupLoginForm();
-            
-            // Initialize EmailJS
-            if (EMAILJS_CONFIG.PUBLIC_KEY && EMAILJS_CONFIG.PUBLIC_KEY !== '2bQtqNNP3Kd3VG7tE') {
-                emailjs.init(EMAILJS_CONFIG.PUBLIC_KEY);
-            }
         });
 
         // Check if user is logged in
@@ -412,7 +416,6 @@
         // Logout
         function logout() {
             sessionStorage.removeItem('adminLoggedIn');
-            clearInterval(autoRefreshInterval);
             document.getElementById('adminDashboard').classList.add('hidden');
             document.getElementById('loginScreen').classList.remove('hidden');
             document.getElementById('loginForm').reset();
@@ -789,88 +792,57 @@ Mark as Completed
             document.getElementById('confirmModal').classList.remove('flex');
         }
 
-        // EMAILJS FUNCTIONS
-        // Function to send email using EmailJS
-        async function sendEmailJS(booking, status) {
-            // Check if EmailJS is properly configured
-            if (!EMAILJS_CONFIG.SERVICE_ID || EMAILJS_CONFIG.SERVICE_ID === 'service_6uxi424') {
-                throw new Error('EmailJS is not configured. Please set up your EmailJS credentials.');
-            }
-
-            // Prepare template parameters
-            const templateParams = {
-                to_email: booking.email,
-                to_name: booking.name,
-                client_name: booking.name,
-                client_email: booking.email,
-                client_phone: booking.phone || 'Not provided',
-                booking_id: booking.bookingId || 'N/A',
-                service: booking.service || 'Unknown Service',
-                date: formatDate(booking.date),
-                time: formatTime(booking.time),
-                duration: getServiceDuration(booking.service), // You'll need to create this function
-                price: booking.servicePrice || '0',
-                crypto_amount: booking.cryptoAmount || '0',
-                crypto_type: booking.crypto || 'N/A',
-                wallet_address: booking.walletAddress || 'N/A',
-                special_requests: booking.specialRequests || 'None',
-                status: status === 'confirmed' ? 'Confirmed' : 'Reminder',
-                status_text: status === 'confirmed' ? 'Booking Confirmed' : 'Appointment Reminder',
-                business_name: 'Luna Massage',
-                business_phone: '(123) 456-7890',
-                business_email: 'info@lunamassage.com',
-                business_address: '123 Wellness Street, City, State 12345',
-                subject: status === 'confirmed' ? 'Booking Confirmed - Luna Massage' : 'Appointment Reminder - Luna Massage'
-            };
-
-            // Choose template based on status
-            let templateId;
-            if (status === 'confirmed') {
-                templateId = EMAILJS_CONFIG.TEMPLATES.CONFIRMATION;
-            } else if (status === 'reminder') {
-                templateId = EMAILJS_CONFIG.TEMPLATES.REMINDER;
-            } else {
-                throw new Error('Invalid email status');
-            }
+        // SIMPLIFIED EMAIL FUNCTION - NO CHECKS
+        async function sendEmailJS(booking) {
+            console.log('Attempting to send email...');
+            console.log('EmailJS Initialized:', isEmailJSInitialized);
+            console.log('Booking email:', booking.email);
 
             try {
+                // Very simple template parameters
+                const templateParams = {
+                    to_email: booking.email,
+                    to_name: booking.name,
+                    client_name: booking.name,
+                    booking_id: booking.bookingId || 'N/A',
+                    service: booking.service || 'Unknown Service',
+                    date: formatDate(booking.date),
+                    time: formatTime(booking.time),
+                    price: booking.servicePrice || '0',
+                    crypto_amount: booking.cryptoAmount || '0',
+                    crypto_type: booking.crypto || 'N/A',
+                    special_requests: booking.specialRequests || 'None'
+                };
+
+                console.log('Sending email with params:', templateParams);
+
                 const response = await emailjs.send(
                     EMAILJS_CONFIG.SERVICE_ID,
-                    templateId,
+                    EMAILJS_CONFIG.TEMPLATE_ID,
                     templateParams
                 );
-                
-                console.log('EmailJS response:', response);
-                return { success: true, messageId: response.messageId };
+
+                console.log('Email sent successfully:', response);
+                return { success: true, response: response };
+
             } catch (error) {
                 console.error('EmailJS error:', error);
-                return { 
-                    success: false, 
-                    error: error.text || error.message 
+                return {
+                    success: false,
+                    error: error.text || error.message || 'Email sending failed'
                 };
             }
         }
 
-        // Helper function to get service duration (you can customize this)
-        function getServiceDuration(serviceName) {
-            const durationMap = {
-                'Swedish Massage': '60 minutes',
-                'Deep Tissue': '60 minutes',
-                'Sports Massage': '60 minutes',
-                'Hot Stone Therapy': '90 minutes',
-                'Aromatherapy': '60 minutes',
-                'Couples Massage': '90 minutes'
-            };
-            return durationMap[serviceName] || '60 minutes';
-        }
-
-        // Process confirmation with EmailJS
+        // SIMPLIFIED PROCESS CONFIRMATION
         async function processConfirmation() {
             closeConfirmModal();
-            showLoading('Confirming payment and sending email...');
+            showLoading('Processing confirmation...');
 
             try {
-                // Update booking status in SheetDB
+                console.log('Starting confirmation for booking:', selectedBooking.bookingId);
+
+                // 1. Update booking status FIRST
                 const updateResponse = await fetch(`${SHEETDB_URL}/bookingId/${selectedBooking.bookingId}`, {
                     method: 'PATCH',
                     headers: {
@@ -889,24 +861,39 @@ Mark as Completed
                     throw new Error('Failed to update booking status');
                 }
 
-                // Send confirmation email via EmailJS
-                const emailResult = await sendEmailJS(selectedBooking, 'confirmed');
+                console.log('Booking status updated to confirmed');
 
-                if (emailResult.success) {
-                    showToast('Payment confirmed and confirmation email sent!');
+                // 2. Try to send email (don't let email failure stop the process)
+                let emailResult = null;
+                if (isEmailJSInitialized && selectedBooking.email) {
+                    try {
+                        emailResult = await sendEmailJS(selectedBooking);
+                        if (emailResult.success) {
+                            console.log('Email sent successfully');
+                        } else {
+                            console.warn('Email failed but booking confirmed:', emailResult.error);
+                        }
+                    } catch (emailError) {
+                        console.warn('Email error (non-fatal):', emailError);
+                    }
                 } else {
-                    // Email failed but booking was updated
-                    console.error('EmailJS error:', emailResult.error);
-                    showToast('Payment confirmed. Email failed: ' + emailResult.error, 'error');
+                    console.warn('Email not sent - EmailJS not initialized or no email address');
                 }
 
-                // Reload bookings
+                // 3. Show appropriate message
+                if (emailResult && emailResult.success) {
+                    showToast('Payment confirmed and confirmation email sent!');
+                } else {
+                    showToast('Payment confirmed. Email service not available.', 'warning');
+                }
+
+                // 4. Reload and close
                 await loadBookings();
                 closeBookingModal();
 
             } catch (error) {
-                console.error('Error processing confirmation:', error);
-                showToast('Error processing confirmation. Please try again.', 'error');
+                console.error('Error in processConfirmation:', error);
+                showToast('Error: ' + error.message, 'error');
             } finally {
                 hideLoading();
             }
@@ -982,7 +969,7 @@ Mark as Completed
             }
         }
 
-        // Resend confirmation email using EmailJS
+        // Resend confirmation email
         async function resendEmail(bookingId) {
             const booking = allBookings.find(b => b.bookingId === bookingId);
             if (!booking) return;
@@ -990,7 +977,7 @@ Mark as Completed
             showLoading('Sending email...');
 
             try {
-                const emailResult = await sendEmailJS(booking, 'reminder');
+                const emailResult = await sendEmailJS(booking);
 
                 if (emailResult.success) {
                     showToast('Confirmation email sent!');
@@ -1021,7 +1008,7 @@ Mark as Completed
             const toast = document.getElementById('toast');
             const toastMessage = document.getElementById('toastMessage');
 
-            toast.className = `fixed bottom-4 right-4 ${type === 'error' ? 'bg-red-500' : 'bg-green-500'} text-white px-6 py-4 rounded-xl shadow-lg transform transition-transform duration-300`;
+            toast.className = `fixed bottom-4 right-4 ${type === 'error' ? 'bg-red-500' : type === 'warning' ? 'bg-yellow-500' : 'bg-green-500'} text-white px-6 py-4 rounded-xl shadow-lg transform transition-transform duration-300`;
             toastMessage.textContent = message;
 
             toast.classList.remove('translate-y-full', 'hidden');
@@ -1037,25 +1024,37 @@ Mark as Completed
         // Format date
         function formatDate(dateStr) {
             if (!dateStr) return 'N/A';
-            const options = { month: 'short', day: 'numeric', year: 'numeric' };
-            return new Date(dateStr).toLocaleDateString('en-US', options);
+            try {
+                const options = { month: 'short', day: 'numeric', year: 'numeric' };
+                return new Date(dateStr).toLocaleDateString('en-US', options);
+            } catch (e) {
+                return 'Invalid date';
+            }
         }
 
         // Format time
         function formatTime(timeStr) {
             if (!timeStr) return 'N/A';
-            const [hours, minutes] = timeStr.split(':');
-            const hour = parseInt(hours);
-            const ampm = hour >= 12 ? 'PM' : 'AM';
-            const formattedHour = hour % 12 || 12;
-            return `${formattedHour}:${minutes} ${ampm}`;
+            try {
+                const [hours, minutes] = timeStr.split(':');
+                const hour = parseInt(hours);
+                const ampm = hour >= 12 ? 'PM' : 'AM';
+                const formattedHour = hour % 12 || 12;
+                return `${formattedHour}:${minutes} ${ampm}`;
+            } catch (e) {
+                return 'Invalid time';
+            }
         }
 
         // Format date time
         function formatDateTime(dateStr) {
             if (!dateStr) return 'N/A';
-            const options = { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' };
-            return new Date(dateStr).toLocaleDateString('en-US', options);
+            try {
+                const options = { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' };
+                return new Date(dateStr).toLocaleDateString('en-US', options);
+            } catch (e) {
+                return 'Invalid date';
+            }
         }
 
         // Capitalize first letter
@@ -1063,6 +1062,28 @@ Mark as Completed
             if (!str) return '';
             return str.charAt(0).toUpperCase() + str.slice(1);
         }
+
+        // Test EmailJS function
+        window.testEmailJS = async function() {
+            if (!selectedBooking) {
+                alert('Please select a booking first');
+                return;
+            }
+
+            console.log('Testing EmailJS initialization:', isEmailJSInitialized);
+            console.log('Testing with booking:', selectedBooking);
+
+            try {
+                const result = await sendEmailJS(selectedBooking);
+                if (result.success) {
+                    alert('Test email sent successfully! Check your EmailJS dashboard.');
+                } else {
+                    alert('Test failed: ' + result.error);
+                }
+            } catch (error) {
+                alert('Test error: ' + error.message);
+            }
+        };
     </script>
 </body>
 </html>
